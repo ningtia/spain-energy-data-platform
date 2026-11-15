@@ -110,6 +110,21 @@ energy-ingest upload                                                            
 
 Then run `databricks/notebooks/00_setup.sql` once and `01_bronze_ingest.py` in Databricks.
 
+## Unity Catalog layout
+
+Three-level namespace `catalog.schema.object`, created by `databricks/notebooks/00_setup.sql`:
+
+| Object | Holds | Who writes / reads |
+|---|---|---|
+| `energy.raw.landing` (volume) | Raw JSON files uploaded by `energy-ingest upload` | ingestion job |
+| `energy.raw.checkpoints` (volume) | Auto Loader state: which files were already processed | Bronze job |
+| `energy.bronze.*` | Raw payload per file, append-only | Bronze job |
+| `energy.silver.*` | Typed, deduplicated, hourly-aligned tables | Silver job |
+| `energy.gold.*` | dbt star schema for analytics and models | dbt; read by analysts/models |
+
+One schema per medallion layer makes ownership and permissions explicit (e.g. analysts get
+read access to `gold` only). All statements use `IF NOT EXISTS`, so the setup is safe to re-run.
+
 ## Design decisions
 
 - **Raw first.** Landing and Bronze keep API responses exactly as received; parsing happens in
@@ -121,6 +136,9 @@ Then run `databricks/notebooks/00_setup.sql` once and `01_bronze_ingest.py` in D
 - **Resumable and fault-tolerant.** Backfills skip chunks already in landing, so an interrupted
   run resumes where it stopped. A failing chunk (e.g. AEMET rate limit, HTTP 429) is logged and
   skipped instead of aborting the run; the command exits non-zero and lists what to retry.
+- **Incremental upload + re-ingest of revised files.** `energy-ingest upload` keeps a manifest
+  and sends only new or changed files; Auto Loader runs with `allowOverwrites` so files the daily
+  job re-pulls are ingested again, and Silver keeps the latest version of each record.
 - **Secrets never land.** API keys live in `.env` (git-ignored) and are excluded from stored
   request metadata — this is unit-tested.
 

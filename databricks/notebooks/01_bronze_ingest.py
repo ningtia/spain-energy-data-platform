@@ -5,7 +5,8 @@
 # MAGIC - Reads every new JSON file in the landing volume **once** (Auto Loader keeps track).
 # MAGIC - Stores the raw payload as a string, plus metadata. No parsing here: if the source
 # MAGIC   changes its format, Bronze never breaks and we can always re-parse later.
-# MAGIC - Append-only. Duplicates from re-uploads are removed in Silver.
+# MAGIC - Append-only. Overwritten files (daily re-pulls) are ingested again; Silver keeps the
+# MAGIC   latest version of each record.
 
 # COMMAND ----------
 
@@ -30,6 +31,9 @@ def load_source(source: str) -> None:
         .option("cloudFiles.format", "text")
         .option("wholetext", "true")  # one file = one row
         .option("pathGlobFilter", "*.json")
+        # The daily job overwrites the last 7 days' files with revised data; re-ingest them.
+        # Silver keeps the latest version per (indicator, timestamp) using ingested_at.
+        .option("cloudFiles.allowOverwrites", "true")
         .load(f"{LANDING}/{source}")
         .select(
             F.get_json_object("value", "$.source").alias("source"),
