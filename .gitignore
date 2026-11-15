@@ -1,0 +1,27 @@
+# secrets
+.env
+
+# local data (never commit raw data)
+data/
+!data/.gitkeep
+
+# python
+__pycache__/
+*.pyc
+.venv/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+
+# dbt
+dbt/target/
+dbt/logs/
+dbt/dbt_packages/
+
+# editors / OS
+.vscode/
+.idea/
+.DS_Store
+
+# run logs
+logs/
